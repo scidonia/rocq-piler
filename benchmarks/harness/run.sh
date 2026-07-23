@@ -95,7 +95,13 @@ echo "[$RUN_ID] Setting up workspace in $WORKDIR ..." >&2
 
 # Minimal scaffold — only the files the LLM needs, nothing to cheat from
 mkdir -p "$WORKDIR/benchmarks/incomplete"
-cp -f "$BENCH_DIR/incomplete/${PROBLEM}.v" "$WORKDIR/benchmarks/incomplete/"
+
+# Axiomander benchmarks need all language + prelude files as deps
+if [[ "$PROBLEM" == Axiomander_* ]]; then
+  cp -f "$BENCH_DIR"/incomplete/Axiomander*.v "$WORKDIR/benchmarks/incomplete/"
+else
+  cp -f "$BENCH_DIR/incomplete/${PROBLEM}.v" "$WORKDIR/benchmarks/incomplete/"
+fi
 [[ -f "$INSTRUCTIONS" ]] && cp -f "$INSTRUCTIONS" "$WORKDIR/benchmarks/incomplete/"
 # Copy profile-specific AGENTS.md if available, otherwise default
 if [[ -f "$SCRIPT_DIR/profiles/${PROFILE}.agents.md" ]]; then
