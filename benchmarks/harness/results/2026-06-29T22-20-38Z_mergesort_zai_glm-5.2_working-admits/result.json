@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-06-29T22:20:38Z",
+  "model": "zai/glm-5.2",
+  "problem": "mergesort",
+  "profile": "working-admits",
+  "git_hash": "faece21",
+  "session_id": "ses_0ea8795dcffemHg50rHkpa8Dgg",
+  "duration_s": 2929,
+  "tokens": {
+    "input": 164656,
+    "output": 14441,
+    "reasoning": 132685,
+    "cache_read": 5107008,
+    "cache_write": 0
+  },
+  "cost": 2.2056948800000002,
+  "steps": 56,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "rocq-piler_edit_file",
+      "count": 21
+    },
+    {
+      "tool": "rocq-piler_search_lemmas",
+      "count": 13
+    },
+    {
+      "tool": "bash",
+      "count": 13
+    },
+    {
+      "tool": "read",
+      "count": 8
+    },
+    {
+      "tool": "todowrite",
+      "count": 5
+    },
+    {
+      "tool": "rocq-piler_check_file",
+      "count": 3
+    },
+    {
+      "tool": "rocq-piler_focus_proof",
+      "count": 2
+    }
+  ],
+  "eval": {
+    "file": "/tmp/bench_mergesort_zai_glm-5.2_working-admits_1782771638_426516_hz3sEx/benchmarks/complete/mergesort.v",
+    "compiles": true,
+    "pairs_total": 2,
+    "pairs_resolved": 2,
+    "pairs": {
+      "mergesort_perm": "proved",
+      "mergesort_sorted": "proved"
+    }
+  }
+}

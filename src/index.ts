@@ -15,7 +15,7 @@ import {
 
 import { RocqLspClient } from './lsp-client.js';
 import { DocumentManager, applyTextEdits } from './document-manager.js';
-import { detectProjectConfig, mergeProjectArgs, findProjectRoot } from './project-config.js';
+import { detectProjectConfig, mergeProjectArgs, findProjectRoot, getProjectMarkerMtimeMs } from './project-config.js';
 import { isSkipLine, isProofEndLine, isTopLevelLine, autoAdvancePosition, insertPosition, findProofLine, computeBulletIndent, proofBounds, findAdmitLines, findTacticAdmitLines, admitSnapPosition, bulletInsertPos, admitPrefix, replaceAdmitLine, replaceAllMatchingAdmits, nextChildBullet, sealOpenGoals, applyAutoQed } from './coq-utils.js';
 import type {
   Position,
@@ -169,6 +169,10 @@ async function main() {
 
   // Track the active project root for dynamic workspace switching
   let activeWorkspaceRoot = workspaceRoot;
+  // Track the mtime of whichever project marker file (_CoqProject etc.)
+  // was in effect at the last (re)start, so we can detect in-place edits
+  // to it even when the project root directory itself hasn't changed.
+  let activeProjectMarkerMtime = getProjectMarkerMtimeMs(activeWorkspaceRoot);
 
   // Speculative imports per file URI — persisted across tool calls
   const speculativeImports = new Map<string, string[]>();
@@ -232,11 +236,22 @@ async function main() {
     const absPath = resolvePath(path);
     const projectRoot = findProjectRoot(absPath);
 
-    if (projectRoot && resolvePath(projectRoot) !== resolvePath(activeWorkspaceRoot)) {
+    const rootChanged = !!projectRoot && resolvePath(projectRoot) !== resolvePath(activeWorkspaceRoot);
+    // Even when the root directory is unchanged, the marker file itself
+    // (_CoqProject/_RocqProject/dune-project) may have been edited since
+    // we last started rocq-lsp against it (e.g. a -Q/-R mapping was
+    // added or changed). rocq-lsp doesn't hot-reload that on its own, so
+    // detect it here via mtime and force a restart too.
+    const currentMarkerMtime = projectRoot ? getProjectMarkerMtimeMs(projectRoot) : 0;
+    const markerChanged = !!projectRoot && !rootChanged && currentMarkerMtime !== activeProjectMarkerMtime;
+
+    if (projectRoot && (rootChanged || markerChanged)) {
       console.error('[mcp-coq-lsp] Switching workspace root:',
-        activeWorkspaceRoot, '->', projectRoot);
+        activeWorkspaceRoot, '->', projectRoot,
+        markerChanged ? '(project marker file changed on disk)' : '');
 
       activeWorkspaceRoot = projectRoot;
+      activeProjectMarkerMtime = currentMarkerMtime;
       docManager.clear();
       speculativeImports.clear();
       fileHistory.clear();

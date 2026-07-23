@@ -1,0 +1,64 @@
+{
+  "timestamp": "2026-06-29T21:51:58Z",
+  "model": "zai/glm-5.2",
+  "problem": "insertion_sort",
+  "profile": "working-admits",
+  "git_hash": "faece21",
+  "session_id": "ses_0eaa1d60dffePPvslgcMRBUjNW",
+  "duration_s": 312,
+  "tokens": {
+    "input": 23038,
+    "output": 2727,
+    "reasoning": 8349,
+    "cache_read": 376704,
+    "cache_write": 0
+  },
+  "cost": 0.17893063999999997,
+  "steps": 20,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "bash",
+      "count": 6
+    },
+    {
+      "tool": "rocq-piler_check_file",
+      "count": 4
+    },
+    {
+      "tool": "read",
+      "count": 3
+    },
+    {
+      "tool": "edit",
+      "count": 3
+    },
+    {
+      "tool": "write",
+      "count": 1
+    },
+    {
+      "tool": "rocq-piler_reset_proof",
+      "count": 1
+    },
+    {
+      "tool": "rocq-piler_edit_file",
+      "count": 1
+    }
+  ],
+  "eval": {
+    "file": "/tmp/bench_insertion_sort_zai_glm-5.2_working-admits_1782769918_413835_EwSv15/benchmarks/complete/insertion_sort.v",
+    "compiles": true,
+    "pairs_total": 1,
+    "pairs_resolved": 1,
+    "pairs": {
+      "insertion_sort_sorted": "proved"
+    }
+  }
+}

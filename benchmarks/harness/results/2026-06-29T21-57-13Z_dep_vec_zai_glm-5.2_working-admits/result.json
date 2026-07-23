@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-06-29T21:57:13Z",
+  "model": "zai/glm-5.2",
+  "problem": "dep_vec",
+  "profile": "working-admits",
+  "git_hash": "faece21",
+  "session_id": "ses_0ea9d0868ffea8UP7xdx254X2N",
+  "duration_s": 1403,
+  "tokens": {
+    "input": 93927,
+    "output": 6872,
+    "reasoning": 71298,
+    "cache_read": 2192320,
+    "cache_write": 0
+  },
+  "cost": 1.045449,
+  "steps": 32,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "read",
+      "count": 8
+    },
+    {
+      "tool": "edit",
+      "count": 6
+    },
+    {
+      "tool": "bash",
+      "count": 5
+    },
+    {
+      "tool": "rocq-piler_check_file",
+      "count": 4
+    },
+    {
+      "tool": "rocq-piler_edit_file",
+      "count": 3
+    },
+    {
+      "tool": "rocq-piler_reset_proof",
+      "count": 2
+    },
+    {
+      "tool": "rocq-piler_focus_proof",
+      "count": 2
+    },
+    {
+      "tool": "write",
+      "count": 1
+    }
+  ],
+  "eval": {
+    "file": "/tmp/bench_dep_vec_zai_glm-5.2_working-admits_1782770233_415192_63JI8A/benchmarks/complete/dep_vec.v",
+    "compiles": true,
+    "pairs_total": 2,
+    "pairs_resolved": 2,
+    "pairs": {
+      "progress": "proved",
+      "preservation": "proved"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-07-23T17:15:26Z",
+  "model": "deepseek/deepseek-v4-pro",
+  "problem": "DictModel",
+  "profile": "working-admits",
+  "git_hash": "21065b6",
+  "session_id": "ses_070066158ffeeW7rUSeAB3QDhj",
+  "duration_s": 72,
+  "tokens": {
+    "input": 15554,
+    "output": 2113,
+    "reasoning": 1463,
+    "cache_read": 187008,
+    "cache_write": 0
+  },
+  "cost": 0.010555014000000001,
+  "steps": 13,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "rocq-piler_edit_file",
+      "count": 7
+    },
+    {
+      "tool": "bash",
+      "count": 3
+    },
+    {
+      "tool": "rocq-piler_search_lemmas",
+      "count": 1
+    },
+    {
+      "tool": "rocq-piler_check_file",
+      "count": 1
+    },
+    {
+      "tool": "read",
+      "count": 1
+    }
+  ],
+  "eval": {
+    "compiles": false,
+    "pairs_total": 0,
+    "pairs_resolved": 0,
+    "pairs": {}
+  }
+}

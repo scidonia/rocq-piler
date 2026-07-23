@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-06-29T23:09:32Z",
+  "model": "zai/glm-5.2",
+  "problem": "indexed_ind",
+  "profile": "working-admits",
+  "git_hash": "faece21",
+  "session_id": "ses_0ea5ad1e7ffemiIO5yNd8GbZjy",
+  "duration_s": 637,
+  "tokens": {
+    "input": 6735,
+    "output": 540,
+    "reasoning": 32297,
+    "cache_read": 85760,
+    "cache_write": 0
+  },
+  "cost": 0.1762094,
+  "steps": 7,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "bash",
+      "count": 3
+    },
+    {
+      "tool": "read",
+      "count": 2
+    },
+    {
+      "tool": "rocq-piler_check_file",
+      "count": 1
+    }
+  ],
+  "eval": {
+    "file": "/tmp/bench_indexed_ind_zai_glm-5.2_working-admits_1782774572_437403_LtOzzE/benchmarks/complete/indexed_ind.v",
+    "compiles": true,
+    "pairs_total": 2,
+    "pairs_resolved": 0,
+    "pairs": {
+      "progress": "neither",
+      "preservation": "neither"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-06-29T23:20:10Z",
+  "model": "zai/glm-5.2",
+  "problem": "pcf_ref",
+  "profile": "working-admits",
+  "git_hash": "faece21",
+  "session_id": "ses_0ea51161effelEfdMhGI9iiKyz",
+  "duration_s": 598,
+  "tokens": {
+    "input": 5055,
+    "output": 195,
+    "reasoning": 32007,
+    "cache_read": 42688,
+    "cache_write": 0
+  },
+  "cost": 0.15986467999999998,
+  "steps": 4,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "read",
+      "count": 2
+    },
+    {
+      "tool": "bash",
+      "count": 1
+    }
+  ],
+  "eval": {
+    "compiles": false,
+    "pairs_total": 0,
+    "pairs_resolved": 0,
+    "pairs": {},
+    "error": "file not created"
+  }
+}

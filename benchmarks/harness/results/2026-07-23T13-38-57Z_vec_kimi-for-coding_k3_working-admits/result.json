@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-07-23T13:38:57Z",
+  "model": "kimi-for-coding/k3",
+  "problem": "vec",
+  "profile": "working-admits",
+  "git_hash": "58d6f53",
+  "session_id": "ses_070cc91ffffet70TEZFcaqDnEK",
+  "duration_s": 9,
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "reasoning": 0,
+    "cache_read": 0,
+    "cache_write": 0
+  },
+  "cost": 0,
+  "steps": 0,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [],
+  "eval": {
+    "compiles": false,
+    "pairs_total": 0,
+    "pairs_resolved": 0,
+    "pairs": {},
+    "error": "file not created"
+  }
+}

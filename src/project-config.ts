@@ -151,6 +151,14 @@ function inferLoadPathsFromDune(workspaceRoot: string): string[] {
 }
 
 /**
+ * Project marker files that identify a Coq/Rocq project root, in the
+ * order they're preferred/checked. Shared between root-detection and
+ * staleness-detection (see [getProjectMarkerMtimeMs]) so the two stay
+ * in sync.
+ */
+export const PROJECT_MARKERS = ['_CoqProject', '_RocqProject', 'dune-project'];
+
+/**
  * Walk up from a file's directory looking for a Coq project root.
  * Returns the directory containing _CoqProject, _RocqProject, or dune-project,
  * or null if no project marker is found.
@@ -167,10 +175,8 @@ export function findProjectRoot(filePath: string): string | null {
     return null;
   }
 
-  const markers = ['_CoqProject', '_RocqProject', 'dune-project'];
-
   for (;;) {
-    for (const marker of markers) {
+    for (const marker of PROJECT_MARKERS) {
       if (existsSync(join(dir, marker))) {
         console.error('[project-config] Found project root:', dir, '(via', marker + ')');
         return dir;
@@ -182,6 +188,31 @@ export function findProjectRoot(filePath: string): string | null {
     }
     dir = parent;
   }
+}
+
+/**
+ * Get the most recent mtime (in ms since epoch) among whichever project
+ * marker files (_CoqProject, _RocqProject, dune-project) are present
+ * directly in `dir`. Returns 0 if none are present.
+ *
+ * Used to detect in-place edits to a project's marker file (e.g. adding
+ * a new -Q/-R mapping) even when the resolved project root directory
+ * hasn't changed, so callers know to force a reload/restart rather than
+ * silently keep using a stale load-path configuration.
+ */
+export function getProjectMarkerMtimeMs(dir: string): number {
+  let latest = 0;
+  for (const marker of PROJECT_MARKERS) {
+    try {
+      const stat = statSync(join(dir, marker));
+      if (stat.mtimeMs > latest) {
+        latest = stat.mtimeMs;
+      }
+    } catch {
+      // Marker doesn't exist (or unreadable) — ignore.
+    }
+  }
+  return latest;
 }
 
 /**
