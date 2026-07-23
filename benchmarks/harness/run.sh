@@ -113,6 +113,11 @@ fi
 
 # Minimal _CoqProject for coq-lsp workspace detection
 echo "-R . McpCoqLspBenchmark" > "$WORKDIR/benchmarks/_CoqProject"
+# Add subdirectory mapping for multi-file benchmarks
+if [[ "$PROBLEM" == */* ]]; then
+  dir="${PROBLEM%%/*}"
+  echo "-R benchmarks/incomplete/${dir} ." >> "$WORKDIR/benchmarks/_CoqProject"
+fi
 
 # Init a bare git repo (opencode expects one)
 git -C "$WORKDIR" init --quiet 2>/dev/null
