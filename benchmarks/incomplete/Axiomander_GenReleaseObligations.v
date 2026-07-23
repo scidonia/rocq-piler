@@ -74,7 +74,14 @@ Lemma gen_table_total_pure : forall f pre post vs,
   gen_table f = Some (FunSpec pre post) ->
   pre vs -> exists v, post vs v.
 Proof.
-Admitted.
+  intros f pre post vs Hgen Hpre.
+  unfold gen_table in Hgen.
+  destruct (String.eqb f "release") eqn:Erel.
+  - discriminate.
+  - destruct (String.eqb f "release_exc0") eqn:Eexc.
+    + discriminate.
+    + discriminate.
+Qed.
 
 Lemma gen_table_total : forall f pre post vs sigma,
   gen_table f = Some (FunSpecS pre post) ->
