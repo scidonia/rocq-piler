@@ -2,6 +2,12 @@
 
 MCP server providing interactive Coq/Rocq proof development tools via coq-lsp.
 
+## Rules
+
+1. **Prove, don't research.** Start writing proofs immediately. Don't search the web for existing proofs or spend time reading the file and understanding the architecture. If a lemma fails, check the error and iterate.
+2. **Use `edit_file` for all edits.** It reports errors with goal states inline — you don't need bash+coqc.
+3. **Start with easy lemmas** (extends, store weakening) — not the hardest (shift, substitution).
+
 ## Tools
 
 - **`search_lemmas`** — find relevant lemmas in the Coq environment by name or pattern
