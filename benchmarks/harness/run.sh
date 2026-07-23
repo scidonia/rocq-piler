@@ -96,9 +96,10 @@ echo "[$RUN_ID] Setting up workspace in $WORKDIR ..." >&2
 # Minimal scaffold — only the files the LLM needs, nothing to cheat from
 mkdir -p "$WORKDIR/benchmarks/incomplete"
 
-# Axiomander benchmarks need all language + prelude files as deps
-if [[ "$PROBLEM" == Axiomander_* ]]; then
-  cp -f "$BENCH_DIR"/incomplete/Axiomander*.v "$WORKDIR/benchmarks/incomplete/"
+# Handle multi-file benchmarks: if PROBLEM contains '/', copy the whole directory
+if [[ "$PROBLEM" == */* ]]; then
+  local dir="${PROBLEM%%/*}"
+  cp -r "$BENCH_DIR/incomplete/${dir}" "$WORKDIR/benchmarks/incomplete/"
 else
   cp -f "$BENCH_DIR/incomplete/${PROBLEM}.v" "$WORKDIR/benchmarks/incomplete/"
 fi
