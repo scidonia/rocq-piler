@@ -98,7 +98,7 @@ mkdir -p "$WORKDIR/benchmarks/incomplete"
 
 # Handle multi-file benchmarks: if PROBLEM contains '/', copy the whole directory
 if [[ "$PROBLEM" == */* ]]; then
-  local dir="${PROBLEM%%/*}"
+  dir="${PROBLEM%%/*}"
   cp -r "$BENCH_DIR/incomplete/${dir}" "$WORKDIR/benchmarks/incomplete/"
 else
   cp -f "$BENCH_DIR/incomplete/${PROBLEM}.v" "$WORKDIR/benchmarks/incomplete/"
