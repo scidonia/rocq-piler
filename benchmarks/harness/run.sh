@@ -153,8 +153,12 @@ cp "$JSON_LOG" "$RUN_DIR/transcript.jsonl"
 
 # Save solution if created
 COMPLETE_FILE="$WORKDIR/benchmarks/complete/${PROBLEM}.v"
+INCOMPLETE_FILE="$WORKDIR/benchmarks/incomplete/${PROBLEM}.v"
 if [[ -f "$COMPLETE_FILE" ]]; then
   cp "$COMPLETE_FILE" "$RUN_DIR/solution.v"
+elif [[ -f "$INCOMPLETE_FILE" ]]; then
+  # Model may have proved on the incomplete file directly
+  cp "$INCOMPLETE_FILE" "$RUN_DIR/solution.v"
 fi
 
 # Extract token data from step_finish events
