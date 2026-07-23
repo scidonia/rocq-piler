@@ -44,7 +44,7 @@ fi
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 SAFE_TIMESTAMP=$(echo "$TIMESTAMP" | tr ':' '-')
 SAFE_MODEL=$(echo "$MODEL" | tr '/' '_')
-RUN_ID="${PROBLEM}_${SAFE_MODEL}_${PROFILE}_$(date +%s)_$$"
+RUN_ID="$(echo "${PROBLEM}_${SAFE_MODEL}_${PROFILE}_$(date +%s)_$$" | tr '/' '_')"
 JSON_LOG="/tmp/opencode_bench_${RUN_ID}.jsonl"
 
 # Git hash of rocq-piler for reproducibility
