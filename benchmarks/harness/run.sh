@@ -187,7 +187,7 @@ else
 fi
 
 if [[ -n "$EVAL_FILE" ]]; then
-  EVAL_RESULT=$(bash "$SCRIPT_DIR/evaluate.sh" "$EVAL_FILE" --reference "$INCOMPLETE_REF" -- -R "$WORKDIR/benchmarks" McpCoqLspBenchmark 2>/dev/null || echo '{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{}}')
+  EVAL_RESULT=$(bash "$SCRIPT_DIR/evaluate.sh" "$EVAL_FILE" --reference "$INCOMPLETE_REF" -- -R "$WORKDIR/benchmarks" McpCoqLspBenchmark -R "$WORKDIR/benchmarks/incomplete" 2>/dev/null || echo '{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{}}')
 else
   EVAL_RESULT='{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{},"error":"file not created"}'
 fi
