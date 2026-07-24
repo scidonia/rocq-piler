@@ -177,8 +177,17 @@ TOOLS_USED=$(jq -r 'select(.type=="tool_use") | .part.tool // "?"' "$JSON_LOG" |
 
 # Evaluate the result
 INCOMPLETE_REF="$WORKDIR/benchmarks/incomplete/${PROBLEM}.v"
+# Use whatever file has the proofs (model might edit incomplete directly)
 if [[ -f "$COMPLETE_FILE" ]]; then
-  EVAL_RESULT=$(bash "$SCRIPT_DIR/evaluate.sh" "$COMPLETE_FILE" --reference "$INCOMPLETE_REF" -- -R "$WORKDIR/benchmarks" McpCoqLspBenchmark 2>/dev/null || echo '{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{}}')
+  EVAL_FILE="$COMPLETE_FILE"
+elif [[ -f "$INCOMPLETE_FILE" ]]; then
+  EVAL_FILE="$INCOMPLETE_FILE"
+else
+  EVAL_FILE=""
+fi
+
+if [[ -n "$EVAL_FILE" ]]; then
+  EVAL_RESULT=$(bash "$SCRIPT_DIR/evaluate.sh" "$EVAL_FILE" --reference "$INCOMPLETE_REF" -- -R "$WORKDIR/benchmarks" McpCoqLspBenchmark 2>/dev/null || echo '{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{}}')
 else
   EVAL_RESULT='{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{},"error":"file not created"}'
 fi
