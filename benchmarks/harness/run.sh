@@ -103,6 +103,10 @@ if [[ "$PROBLEM" == */* ]]; then
 else
   cp -f "$BENCH_DIR/incomplete/${PROBLEM}.v" "$WORKDIR/benchmarks/incomplete/"
 fi
+# Axiomander benchmarks need lang deps copied too
+[[ "$PROBLEM" == Axiomander_* ]] && for f in AxiomanderLang AxiomanderPrelude AxiomanderWp; do
+  cp -f "$BENCH_DIR/incomplete/${f}.v" "$WORKDIR/benchmarks/incomplete/" 2>/dev/null
+done
 [[ -f "$INSTRUCTIONS" ]] && cp -f "$INSTRUCTIONS" "$WORKDIR/benchmarks/incomplete/"
 # Copy profile-specific AGENTS.md if available, otherwise default
 if [[ -f "$SCRIPT_DIR/profiles/${PROFILE}.agents.md" ]]; then
