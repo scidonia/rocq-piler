@@ -48,7 +48,7 @@ extract_statuses() {
 }
 
 # 2. Discover pairs from the INCOMPLETE (reference) file
-declare -A REF_PAIRS  # base_name -> 1
+declare -A REF_PAIRS=()  # base_name -> 1
 if [[ -n "$INCOMPLETE" && -f "$INCOMPLETE" ]]; then
   while IFS=' ' read -r name status; do
     [[ -z "$name" ]] && continue
