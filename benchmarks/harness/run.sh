@@ -187,6 +187,11 @@ else
 fi
 
 if [[ -n "$EVAL_FILE" ]]; then
+  # Pre-compile axiomander dependencies if they exist
+  for dep in "$WORKDIR/benchmarks/incomplete"/Axiomander*.v; do
+    [[ "$dep" == *GenRelease* || "$dep" == *GenReserve* || "$dep" == *GenRestock* || "$dep" == *GenTransfer* ]] && continue
+    [[ -f "$dep" ]] && coqc -R "$WORKDIR/benchmarks/incomplete" -q "$dep" 2>/dev/null
+  done
   EVAL_RESULT=$(bash "$SCRIPT_DIR/evaluate.sh" "$EVAL_FILE" --reference "$INCOMPLETE_REF" -- -R "$WORKDIR/benchmarks" McpCoqLspBenchmark -R "$WORKDIR/benchmarks/incomplete" 2>/dev/null || echo '{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{}}')
 else
   EVAL_RESULT='{"compiles":false,"pairs_total":0,"pairs_resolved":0,"pairs":{},"error":"file not created"}'
