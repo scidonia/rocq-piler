@@ -104,7 +104,7 @@ with open('$W/$f', 'w') as fh: fh.write('\n'.join(result))
       t0=$(date +%s)
       timeout "$TIMEOUT" opencode run --model "$MODEL" --format json \
         --dangerously-skip-permissions --dir "$W" \
-        "Prove all Admitted theorems in $f. Use edit_file for edits. Read the file first, then write proofs." \
+        "Prove all Admitted theorems in $f. Start proving immediately — use rocq-piler_edit_file. Do NOT research or compile dependencies." \
         > "$RESULT_DIR/${f%.v}.jsonl" 2>/dev/null
       t1=$(date +%s)
       qed=$(grep -c 'Qed\.' "$W/$f" 2>/dev/null || echo 0)
