@@ -10,6 +10,11 @@ while [[ $# -gt 0 ]]; do
   case $1 in --model) MODEL="$2"; shift 2 ;; --timeout) TIMEOUT="$2"; shift 2 ;; *) shift ;; esac
 done
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ROCQ_PILER_DIST="$REPO_DIR/dist/index.js"
+COQ_LSP_PATH=$(jq -r '(.mcpServers // .mcp // {})["rocq-piler"].command[-1] // empty' "$HOME/.config/opencode/opencode.json" 2>/dev/null || echo "coq-lsp")
+
 SPEC="$SPEC_DIR/bench_spec.json"
 [[ ! -f "$SPEC" ]] && { echo "No bench_spec.json in $SPEC_DIR"; exit 1; }
 
@@ -19,6 +24,20 @@ mkdir -p "$RESULT_DIR"
 
 echo "=== $CONTRACT: compiling deps ==="
 W=$(mktemp -d "/tmp/spec_${CONTRACT}_XXXXXX")
+
+# Create opencode config with rocq-piler MCP
+jq -n --arg cmd "node" --arg dist "$ROCQ_PILER_DIST" --arg coq "$COQ_LSP_PATH" '{
+  mcp: { "rocq-piler": { type: "local", command: [$cmd, $dist, "--coq-lsp-path", $coq], enabled: true } },
+  tools: {
+    "rocq-piler_add_lemma": false, "rocq-piler_add_block": false,
+    "rocq-piler_delete_lemma": false, "rocq-piler_move_lemma": false,
+    "rocq-piler_inspect_term": false, "rocq-piler_inspect_about": false,
+    "rocq-piler_require_lib": false, "rocq-piler_locate_term": false,
+    "rocq-mcp_*": false, "morph-mcp_*": false, "github_*": false,
+    "google-workspace_*": false, "brevo_*": false, "fal-ai-image_*": false,
+    "axiomander_*": false
+  }
+}' > "$W/opencode.json"
 
 # Copy shared deps (from ../../ = coq/ directory)
 for f in $(jq -r '.compile.shared[]' "$SPEC"); do
