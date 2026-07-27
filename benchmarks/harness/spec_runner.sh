@@ -20,9 +20,9 @@ mkdir -p "$RESULT_DIR"
 echo "=== $CONTRACT: compiling deps ==="
 W=$(mktemp -d "/tmp/spec_${CONTRACT}_XXXXXX")
 
-# Copy shared deps
+# Copy shared deps (from ../../ = coq/ directory)
 for f in $(jq -r '.compile.shared[]' "$SPEC"); do
-  cp "$SPEC_DIR/../${f}" "$W/" 2>/dev/null || cp "$SPEC_DIR/${f}" "$W/" 2>/dev/null || true
+  cp "$SPEC_DIR/../../${f}" "$W/" 2>/dev/null || cp "$SPEC_DIR/${f}" "$W/" 2>/dev/null || { echo "MISSING: $f"; exit 1; }
 done
 # Copy per-contract deps
 for f in $(jq -r '.compile.per_contract[]' "$SPEC"); do
@@ -35,6 +35,7 @@ for f in SnakeletExnLang SnakeletExnWp SpecPrelude; do
 done
 # Then per-contract deps
 for f in *.v; do
+  [[ ! -f "$f" ]] && continue
   [[ "$f" == *L[0-9].v ]] && continue
   [[ "$f" == Snakelet* ]] && continue
   [[ "$f" == SpecPrelude* ]] && continue
