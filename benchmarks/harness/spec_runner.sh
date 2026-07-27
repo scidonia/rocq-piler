@@ -29,10 +29,15 @@ for f in $(jq -r '.compile.per_contract[]' "$SPEC"); do
   cp "$SPEC_DIR/${f}" "$W/"
 done
 
-# Compile all deps sequentially
-cd "$W"
+# Compile shared deps first
+for f in SnakeletExnLang SnakeletExnWp SpecPrelude; do
+  [ -f "${f}.v" ] && coqc -q "${f}.v" 2>/dev/null || true
+done
+# Then per-contract deps
 for f in *.v; do
   [[ "$f" == *L[0-9].v ]] && continue
+  [[ "$f" == Snakelet* ]] && continue
+  [[ "$f" == SpecPrelude* ]] && continue
   coqc -q "$f" 2>/dev/null || { echo "FAIL: $f"; exit 1; }
 done
 echo "  deps compiled"
