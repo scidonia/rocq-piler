@@ -50,7 +50,7 @@ done
 
 # Compile shared deps first
 for f in SnakeletExnLang SnakeletExnWp SpecPrelude; do
-  [ -f "${f}.v" ] && coqc -q "${f}.v" 2>/dev/null || true
+  [ -f "${f}.v" ] && coqc "${f}.v" 2>&1 || { echo "FAIL compiling ${f}.v"; exit 1; }
 done
 # Then per-contract deps
 for f in *.v; do
@@ -58,7 +58,7 @@ for f in *.v; do
   [[ "$f" == *L[0-9].v ]] && continue
   [[ "$f" == Snakelet* ]] && continue
   [[ "$f" == SpecPrelude* ]] && continue
-  coqc -q "$f" 2>/dev/null || { echo "FAIL: $f"; exit 1; }
+  coqc "$f" 2>&1 || { echo "FAIL compiling $f"; exit 1; }
 done
 echo "  deps compiled"
 
