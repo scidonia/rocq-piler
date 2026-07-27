@@ -1,0 +1,19 @@
+{
+  "contract": "restock",
+  "phases": [
+    {
+      "files": [
+        "restock_L0.v",
+        "restock_L2.v"
+      ],
+      "maxParallel": 2
+    },
+    {
+      "files": [
+        "restock_L1.v",
+        "restock_L3.v"
+      ],
+      "maxParallel": 2
+    }
+  ]
+}

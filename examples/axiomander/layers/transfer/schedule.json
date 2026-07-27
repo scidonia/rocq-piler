@@ -1,0 +1,19 @@
+{
+  "contract": "transfer",
+  "phases": [
+    {
+      "files": [
+        "transfer_L0.v",
+        "transfer_L2.v"
+      ],
+      "maxParallel": 2
+    },
+    {
+      "files": [
+        "transfer_L1.v",
+        "transfer_L3.v"
+      ],
+      "maxParallel": 2
+    }
+  ]
+}

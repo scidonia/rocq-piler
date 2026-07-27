@@ -1,0 +1,19 @@
+{
+  "contract": "release",
+  "phases": [
+    {
+      "files": [
+        "release_L0.v",
+        "release_L2.v"
+      ],
+      "maxParallel": 2
+    },
+    {
+      "files": [
+        "release_L1.v",
+        "release_L3.v"
+      ],
+      "maxParallel": 2
+    }
+  ]
+}

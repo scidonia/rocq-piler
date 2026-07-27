@@ -1,0 +1,19 @@
+{
+  "contract": "reserve",
+  "phases": [
+    {
+      "files": [
+        "reserve_L0.v",
+        "reserve_L2.v"
+      ],
+      "maxParallel": 2
+    },
+    {
+      "files": [
+        "reserve_L1.v",
+        "reserve_L3.v"
+      ],
+      "maxParallel": 2
+    }
+  ]
+}
