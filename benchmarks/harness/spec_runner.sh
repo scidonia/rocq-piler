@@ -48,17 +48,20 @@ for f in $(jq -r '.compile.per_contract[]' "$SPEC"); do
   cp "$SPEC_DIR/${f}" "$W/"
 done
 
-# Compile shared deps first
+# Compile all deps from scratch in correct dependency order
+cd "$W"
+rm -f *.vo *.vos *.vok  # fresh start
 for f in SnakeletExnLang SnakeletExnWp SpecPrelude; do
-  [ -f "${f}.v" ] && { err=$(coqc "${f}.v" 2>&1); [ $? -ne 0 ] && echo "FAIL compiling ${f}.v: $err" && exit 1; }
+  [ ! -f "${f}.v" ] && { echo "MISSING: ${f}.v"; exit 1; }
+  coqc "${f}.v" 2>&1 || { echo "FAIL: ${f}.v"; exit 1; }
 done
-# Then per-contract deps
+# Per-contract defs
 for f in *.v; do
   [[ ! -f "$f" ]] && continue
   [[ "$f" == *L[0-9].v ]] && continue
   [[ "$f" == Snakelet* ]] && continue
   [[ "$f" == SpecPrelude* ]] && continue
-  coqc "$f" 2>&1 || { echo "FAIL compiling $f"; exit 1; }
+  coqc "$f" 2>&1 || { echo "FAIL: $f"; exit 1; }
 done
 echo "  deps compiled"
 
