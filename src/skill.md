@@ -2,6 +2,32 @@
 
 This document provides guidance for completing Coq/Rocq proofs using the `coq-lsp` MCP tools.
 
+## Three-Valued Outcome Verification
+
+Every obligation resolves to exactly one of **PROVED**, **DISPROVED**, or **UNKNOWN** (docs/proof-counterexample-workflow.md). Two dedicated tools implement the protocol:
+
+| Tool | Purpose |
+|------|---------|
+| `verdict` | Check one obligation against the PROVED constraints. Returns `PROVED` or `NOT_PROVED (reason: …)`. |
+| `certify_witness` | Certify a counter-example witness in an `<name>_Lneg.v` layer. Returns `DISPROVED` or `NOT_DISPROVED (reason: …)`. |
+
+**The PROVED constraints** (all required; any failure ⇒ NOT_PROVED):
+1. **Statement-immutability** — the obligation's `(name, statement)` SHA-256 matches `statements.json`. Any statement rewrite ⇒ `NOT_PROVED (reason: statement_modified)`.
+2. **No holes** — no `Admitted.`, `admit.`, `Axiom`, or `Parameter` lines in the file.
+3. **No new axioms** — `Print Assumptions` shows only stdlib primitives (`PrimInt63.*`, `PrimFloat.*`) plus the file's own provided context (its `Context`/`Hypothesis` declarations).
+4. **coqc acceptance** — the file compiles under coqc (kernel, not just coq-lsp).
+
+**The DISPROVED constraints** (all required; any failure ⇒ NOT_DISPROVED):
+1. Witness satellites (`<w>_pre_holds`, `<w>_update_computes`, `<w>_violates_inv`) compile.
+2. The bundling theorem (`<w>_preservation_false`) compiles with no new axioms.
+3. The witness is extractable data (a `CounterWitness` record).
+
+**Decision protocol per obligation:** attempt `verdict` (PROVED). If NOT_PROVED and an Lneg witness exists, attempt `certify_witness` (DISPROVED). Otherwise UNKNOWN with a reason. Build layered packages atomically in dependency order — stale `.vo` chains produce `compile_error — inconsistent assumptions`, a build-hygiene signal (rebuild the whole chain), not an obligation failure.
+
+### Assumption allowlist
+
+PROVED/DISPROVED permit axioms only from: stdlib primitives (`PrimInt63`, `PrimFloat`), and the obligation file's own provided context (`Context`/`Hypothesis` names, e.g. `FC`, `hlc`, `Σ`, `snakeletExn_heapGS_gen0`, `Hen_lookup`/`Hen_insert`/`Hen_row_of`). Any other `Print Assumptions` entry ⇒ `new_axioms`.
+
 ## Tool Reference
 
 ### Proof Navigation
@@ -500,3 +526,5 @@ insert_tactics tactic="inversion Hty; subst.
 ```
 
 coq-lsp validates the whole block atomically and returns the resulting goal state.
+
+

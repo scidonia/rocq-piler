@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-07-23T20:34:56Z",
+  "model": "deepseek/deepseek-v4-pro",
+  "problem": "Axiomander_GenReleaseObligations",
+  "profile": "working-admits",
+  "git_hash": "23abe6b",
+  "session_id": "ses_06f4fb945ffeQeE9pWL5GkTHNf",
+  "duration_s": 3,
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "reasoning": 0,
+    "cache_read": 0,
+    "cache_write": 0
+  },
+  "cost": 0,
+  "steps": 0,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [],
+  "eval": {
+    "compiles": false,
+    "pairs_total": 0,
+    "pairs_resolved": 0,
+    "pairs": {},
+    "error": "file not created"
+  }
+}

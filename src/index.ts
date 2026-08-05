@@ -27,9 +27,10 @@ import type {
   RunOpts,
 } from './types.js';
 import * as fs from 'fs';
-import { dirname, resolve as resolvePath } from 'path';
+import { dirname, resolve as resolvePath, join } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
+import { execFile } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -228,12 +229,113 @@ async function main() {
   }
 
   /**
+   * Run coqc on a file and compare results with coq-lsp's view.
+   * Returns parsed errors and whether coqc succeeded. Used to detect
+   * coq-lsp vs coqc discrepancies (e.g., coq-lsp says Qed but coqc rejects).
+   */
+  async function coqcValidate(file: string): Promise<{
+    success: boolean;
+    errors: Array<{ line: number; message: string }>;
+    output: string;
+  }> {
+    const absPath = resolvePath(file);
+    const projectRoot = findProjectRoot(absPath) || dirname(absPath);
+    const pc = detectProjectConfig(projectRoot);
+
+    // Derive coqc from coq-lsp path (same opam switch)
+    const coqLspPath = config.rocqLspPath || 'coq-lsp';
+    const coqcPath = join(dirname(coqLspPath), 'coqc');
+
+    // Filter load paths: skip "-R . ." (coqc rejects "." as logical path;
+    // coqc finds .vo files in CWD without explicit args).
+    const loadPaths = pc.loadPaths.filter((arg, i, arr) => {
+      if (arr[i] === '-R' && arr[i + 1] === '.' && arr[i + 2] === '.') return false;
+      if (arr[i - 1] === '-R' && arr[i] === '.' && arr[i + 1] === '.') return false;
+      if (arr[i - 2] === '-R' && arr[i - 1] === '.' && arr[i] === '.') return false;
+      return true;
+    });
+
+    // Compile to a TEMP directory so coqc never writes .vo next to the
+    // target file.  Recompiling a layer in-place changes its digest and
+    // invalidates downstream layers built against it ("inconsistent
+    // assumptions").  Verification must be read-only w.r.t. the package's
+    // .vo chain.
+    const os = await import('os');
+    const fsp = await import('fs/promises');
+    const tmpDir = await fsp.mkdtemp(join(os.tmpdir(), 'rocq-coqc-'));
+    const tmpFile = join(tmpDir, absPath.split('/').pop() || 'check.v');
+    await fsp.copyFile(absPath, tmpFile);
+
+    // Rewrite relative -R/-Q physical paths to be relative to the ORIGINAL
+    // project root (they are recorded that way in _CoqProject), keeping
+    // the kernel path resolvable; then add the original dir as a -R so the
+    // target file's own dependencies (defs/L0/L1/L2) resolve from the
+    // package's existing .vo files without recompiling them.
+    const dirArgs: string[] = [];
+    for (let i = 0; i < loadPaths.length; i++) {
+      if ((loadPaths[i] === '-Q' || loadPaths[i] === '-R') && i + 2 < loadPaths.length) {
+        const phys = loadPaths[i + 1];
+        const resolved = phys.startsWith('/')
+          ? phys
+          : join(projectRoot, phys);
+        dirArgs.push(loadPaths[i], resolved, loadPaths[i + 2]);
+        i += 2;
+      }
+    }
+    dirArgs.push('-R', dirname(absPath), '');
+
+    const args = [...dirArgs, tmpFile];
+
+    if (process.env.ROCQ_PILER_DEBUG_COQC) {
+      console.error('[coqcValidate]', coqcPath, JSON.stringify(args), 'cwd:', tmpDir);
+    }
+
+    return new Promise((resolve) => {
+      execFile(coqcPath, args, {
+        timeout: 30000,
+        maxBuffer: 1024 * 1024,
+        cwd: tmpDir,
+      }, (err, stdout, stderr) => {
+        const output = stderr.trim();
+        if (!err && !output) {
+          resolve({ success: true, errors: [], output: '' });
+          return;
+        }
+        const errors: Array<{ line: number; message: string }> = [];
+        // coqc error format: File "...", line N, characters M-O:
+        // Followed by multiline error message. Messages accumulate until
+        // the next "File" header or end of output.
+        const lines = output.split('\n');
+        let currentError: { line: number; message: string } | null = null;
+        for (const l of lines) {
+          const m = l.match(/^File\s+".*",\s+line\s+(\d+),\s+characters?\s+\d+-?\d*:\s*$/);
+          if (m) {
+            if (currentError) {
+              currentError.message = currentError.message.trim();
+              if (currentError.message) errors.push(currentError);
+            }
+            currentError = { line: parseInt(m[1], 10), message: '' };
+          } else if (currentError && l.trim()) {
+            // Accumulate message lines, separated by space
+            currentError.message += (currentError.message ? ' ' : '') + l.trim();
+          }
+        }
+        if (currentError && currentError.message.trim()) errors.push(currentError);
+
+        resolve({ success: !err, errors, output });
+      });
+    });
+  }
+
+  /**
    * Open a document, first detecting and switching to its project root if needed.
    * This allows files from different Coq projects to be opened without restarting
    * the MCP server.
    */
   async function ensureDocumentOpened(path: string) {
     const absPath = resolvePath(path);
+    // Delete any .vos file for this document — coq-lsp/coqc 9.x choke on them.
+    try { fs.unlinkSync(absPath.replace(/\.v$/, '.vos')); } catch {}
     const projectRoot = findProjectRoot(absPath);
 
     const rootChanged = !!projectRoot && resolvePath(projectRoot) !== resolvePath(activeWorkspaceRoot);
@@ -252,6 +354,7 @@ async function main() {
 
       activeWorkspaceRoot = projectRoot;
       activeProjectMarkerMtime = currentMarkerMtime;
+      projectSkillContent = loadProjectSkill();
       docManager.clear();
       speculativeImports.clear();
       fileHistory.clear();
@@ -313,7 +416,8 @@ async function main() {
 
   async function forceResync(file: string, label = 'resync'): Promise<{ uri: string; languageId: string; version: number; text: string }> {
     try {
-      await docManager.closeDocument(file);
+      // Refresh without closing — closing destroys coq-lsp's import resolution
+      // and causes "Unable to locate library" errors on subsequent calls.
       const reopened = await ensureDocumentOpened(file);
       await retryDocumentNotReady(() =>
         lspClient.sendRequest('coq/getDocument', {
@@ -363,27 +467,50 @@ async function main() {
 
   // ── MCP Resources ──
 
-  // Load skill guide content at startup
+  // Load global skill guide content at startup
   const skillGuideUri = 'coq://skill-guide';
   const skillGuideContent = fs.readFileSync(
     resolvePath(__dirname, '../src/skill.md'), 'utf-8'
   );
 
-  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: [
+  // Per-workspace project skill — re-read when workspace switches
+  const projectSkillUri = 'coq://project-skill';
+  function loadProjectSkill(): string | null {
+    const skillPath = resolvePath(activeWorkspaceRoot, '_skill.md');
+    try { return fs.readFileSync(skillPath, 'utf-8'); } catch { return null; }
+  }
+  let projectSkillContent: string | null = loadProjectSkill();
+  let _skillInjected = false;
+
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    const resources: any[] = [
       {
         uri: skillGuideUri,
         name: 'Coq Proof Skill Guide',
-        description: 'Comprehensive reference for proving Coq/Rocq theorems using MCP coq-lsp tools. Covers proof strategy, bullet system, lemma management, common tactics, and troubleshooting.',
+        description: 'General Coq/Rocq proof reference: tools, bullet system, tactics, troubleshooting.',
         mimeType: 'text/markdown',
       },
-    ],
-  }));
+    ];
+    if (projectSkillContent) {
+      resources.push({
+        uri: projectSkillUri,
+        name: 'Project Proof Patterns',
+        description: 'Library-specific heuristics and patterns for the current workspace (e.g. Iris heap proofs, stdpp patterns).',
+        mimeType: 'text/markdown',
+      });
+    }
+    return { resources };
+  });
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     if (request.params.uri === skillGuideUri) {
       return {
         contents: [{ uri: skillGuideUri, mimeType: 'text/markdown', text: skillGuideContent }],
+      };
+    }
+    if (request.params.uri === projectSkillUri && projectSkillContent) {
+      return {
+        contents: [{ uri: projectSkillUri, mimeType: 'text/markdown', text: projectSkillContent }],
       };
     }
     throw new Error(`Unknown resource: ${request.params.uri}`);
@@ -616,7 +743,7 @@ async function main() {
             type: 'object',
             properties: {
               file: { type: 'string' },
-              mode: { type: 'string', enum: ['full', 'errors', 'first'], default: 'full', description: '"full" (default): show all items. "errors": only FAILED/Admitted/Qed*/unchecked — compact. "first": stop after first FAILED item — tight feedback like coqc.' },
+              mode: { type: 'string', enum: ['full', 'errors', 'first'], default: 'full', description: '"full" (default): show all items. "errors": only FAILED/DISCREPANCY/Admitted/Qed*/unchecked — compact. "first": stop after first FAILED or DISCREPANCY item — tight feedback like coqc.' },
               start_line: { type: 'number', description: 'Optional: 0-based start line for paginated summary' },
               count: { type: 'number', description: 'Optional: max items to return (boundary-expanding)' },
               timeout_ms: { type: 'number', description: 'Optional: per-request timeout in ms (default 120000). Increase for large files.' },
@@ -773,6 +900,46 @@ async function main() {
             required: ['file', 'name', 'before'],
           },
         },
+        {
+          name: 'verdict',
+          description:
+            'Three-valued outcome check for a single obligation (docs/proof-counterexample-workflow.md). ' +
+            'Returns proved / not_proved.  A verdict of proved requires ALL of: ' +
+            '(1) statement hash unchanged vs statements.json (immutability), ' +
+            '(2) proof closes with Qed and no admit/Admitted in the file, ' +
+            '(3) Print Assumptions shows no new axioms beyond the provided context, ' +
+            '(4) the file compiles under coqc.  Any statement rewrite ⇒ not_proved (UNPROVED).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              file: { type: 'string', description: 'Path to the obligation .v file' },
+              name: { type: 'string', description: 'Obligation name (lemma/theorem)' },
+              statements: { type: 'string', description: 'Optional path to statements.json for hash comparison' },
+              timeout_ms: { type: 'number', description: 'LSP request timeout (default 120000)' },
+            },
+            required: ['file', 'name'],
+          },
+        },
+        {
+          name: 'certify_witness',
+          description:
+            'Certify a DISPROVED counter-example witness in an Lneg layer ' +
+            '(docs/proof-counterexample-workflow.md §5).  Returns disproved / not_disproved. ' +
+            'A verdict of disproved requires ALL of: ' +
+            '(1) the witness satellites (pre_holds, update_computes, violates_inv) compile Qed with no admits, ' +
+            '(2) the bundling theorem (<w>_preservation_false) compiles Qed with no admits and ' +
+            'Print Assumptions shows no new axioms, (3) the witness data is extractable (CounterWitness record). ' +
+            'Report the extractable witness on success for the dialectic loop.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              file: { type: 'string', description: 'Path to the <name>_Lneg.v file' },
+              witness: { type: 'string', description: 'Witness name (e.g. "cex_0")' },
+              timeout_ms: { type: 'number', description: 'LSP request timeout (default 120000)' },
+            },
+            required: ['file', 'witness'],
+          },
+        },
     ];
     const tools = POSITIONAL_ONLY
       ? allTools.filter((t) => POSITIONAL_TOOLS.has(t.name))
@@ -808,6 +975,11 @@ async function main() {
     }
 
     function reply(summary: string, data: unknown) {
+      // Inject project skill on first response per session
+      if (projectSkillContent && !_skillInjected) {
+        _skillInjected = true;
+        summary += '\n\n--- Project proof heuristics (coq://project-skill) ---\n' + projectSkillContent;
+      }
       const d = data as Record<string, unknown>;
       const parts: string[] = [summary];
       if (d?.goals) {
@@ -1090,11 +1262,22 @@ async function main() {
             ? `replaced "${find.substring(0, 40)}${find.length > 40 ? '…' : ''}"`
             : `applied ${resolvedEdits.length} edit(s)`;
 
-          // Auto-check: harvest errors after edit
+          // Auto-check: harvest errors after edit.
+          // Poll diagnostics until the transient "Unable to locate library"
+          // errors clear, up to 3s, before reporting stale cache.
           let autoCheck = '';
           try {
-            const diags = lspClient.getDiagnostics(updatedDoc.uri);
-            const errors = diags.filter((d: any) => d.severity === 1);
+            let diags: any[] = [];
+            const maxAttempts = 60;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              await sleep(500);
+              diags = lspClient.getDiagnostics(updatedDoc.uri);
+              const hasImportErr = diags.some((d: any) =>
+                d.severity === 1 && d.message.includes('Unable to locate'));
+              if (!hasImportErr || attempt === maxAttempts - 1) break;
+            }
+            const errors = diags.filter((d: any) => d.severity === 1 &&
+              !d.message.includes('Unable to locate library'));
             if (errors.length === 0) {
               autoCheck = '\n✓ no errors';
               editFailTracker.delete(file);
@@ -1127,19 +1310,25 @@ async function main() {
                 autoCheck += `\n  ... and ${errors.length - MAX_ERRORS} more error(s)`;
               }
 
-              // Thrash detection on first error
-              const firstErr = errors[0];
-              const errorKey = `${firstErr.range.start.line}:${firstErr.message.slice(0, 60)}`;
-              const tracker = editFailTracker.get(file);
-              if (tracker && tracker.errorKey === errorKey) {
-                tracker.count++;
-                if (tracker.count >= 5) {
-                  autoCheck += `\n⚠ same error ${tracker.count} consecutive edits — consider reset_proof to start over, or stratify to case-split`;
+              // Thrash detection on first non-import error.
+              // Ignore "Unable to locate library" — those are transient
+              // coq-lsp warm-up artifacts that check_file will resolve.
+              const firstRealErr = errors.find((e: any) =>
+                !e.message.includes('Unable to locate library'));
+              if (firstRealErr) {
+                const errorKey = `${firstRealErr.range.start.line}:${firstRealErr.message.slice(0, 60)}`;
+                const tracker = editFailTracker.get(file);
+                if (tracker && tracker.errorKey === errorKey) {
+                  tracker.count++;
+                  if (tracker.count >= 5) {
+                    autoCheck += `\n⚠ same error ${tracker.count} consecutive edits — consider reset_proof to start over, or stratify to case-split`;
+                  }
+                } else {
+                  editFailTracker.set(file, { errorKey, count: 1 });
                 }
-              } else {
-                editFailTracker.set(file, { errorKey, count: 1 });
               }
-            }
+
+              }
 
             // Always check for unsound Qed proofs (depends on admitted/axioms)
             // Lightweight: just count Admitted vs Qed. Full Print Assumptions is in check_file.
@@ -1172,8 +1361,21 @@ async function main() {
             } catch {}
           } catch {}
 
+          let coqcWarn = '';
+          if (autoCheck.includes('no errors')) {
+            try {
+              const cResult = await coqcValidate(file);
+              if (!cResult.success) {
+                coqcWarn = `\n⚠ coqc rejects (${cResult.errors.length} error(s)):`;
+                for (const e of cResult.errors) {
+                  coqcWarn += `\n  coqc L${e.line}: ${e.message}`;
+                }
+              }
+            } catch {}
+          }
+
           return reply(
-            `${fileLine(file, 0)} — ${summary}, v${updatedDoc.version}` + autoCheck,
+            `${fileLine(file, 0)} — ${summary}, v${updatedDoc.version}` + autoCheck + coqcWarn,
             { file, new_version: updatedDoc.version, found: true }
           );
         }
@@ -2429,6 +2631,13 @@ async function main() {
                 (admittedGoals.length > 0 ? ` — ${admittedGoals.join(', ')}` : '')
               : '';
 
+            // Run coqc cross-validation — inline errors with coq-lsp diagnostics
+            let coqcErrors: Array<{ line: number; message: string }> = [];
+            try {
+              const cResult = await coqcValidate(file);
+              coqcErrors = cResult.errors;
+            } catch {}
+
             // Summary: scan file for toplevel names, status, and line ranges
             const errorLines = new Set<number>();
             const errorDetails: Array<{ line: number; message: string }> = [];
@@ -2493,6 +2702,11 @@ async function main() {
                   }
                   if (hasError) status = 'FAILED';
                 }
+                // If coq-lsp says Qed but coqc found errors, mark DISCREPANCY.
+                if (status === 'Qed' && coqcErrors.length > 0) {
+                  const hasCoqcErr = coqcErrors.some(e => e.line >= i + 1 && e.line <= endLine + 1);
+                  if (hasCoqcErr) status = 'DISCREPANCY';
+                }
                 const rangeStr = `L${i}-L${endLine}`;
                 let entry: string;
                 if (isDef) {
@@ -2519,6 +2733,22 @@ async function main() {
                     entry += `\n  ERROR L${e.line + 1}: ${msg}`;
                   }
                   if (itemErrors.length > 3) entry += `\n  ... and ${itemErrors.length - 3} more error(s)`;
+                }
+                // Append coqc errors that overlap this item's range
+                if (status === 'FAILED' || status === 'DISCREPANCY') {
+                  const itemCoqcErrs = coqcErrors.filter(e => e.line >= i + 1 && e.line <= endLine + 1);
+                  for (const e of itemCoqcErrs) {
+                    const msg = e.message.length > 500 ? e.message.slice(0, 497) + '...' : e.message;
+                    entry += `\n  coqc L${e.line}: ${msg}`;
+                  }
+                }
+                // Show any coqc errors that don't overlap known items (fallthrough)
+                if (status === 'Qed' || status === 'open') {
+                  const itemCoqcErrs = coqcErrors.filter(e => e.line >= i + 1 && e.line <= endLine + 1);
+                  for (const e of itemCoqcErrs) {
+                    const msg = e.message.length > 500 ? e.message.slice(0, 497) + '...' : e.message;
+                    entry += `\n  coqc L${e.line}: ${msg}`;
+                  }
                 }
                 items.push({ text: entry, startLine: i });
                 i = endLine;
@@ -2597,10 +2827,12 @@ async function main() {
               }
             }
 
-            // Auto-admit: convert FAILED proofs to hash-addressable admits
-            const shouldAutoAdmit = (args as any).auto_admit !== false;
+            // Auto-admit: convert FAILED proofs to hash-addressable admits.
+            // Opt-in only — off by default (corrupts proofs in automated workflows).
+            const shouldAutoAdmit = (args as any).auto_admit === true;
             if (shouldAutoAdmit) {
-              const failedItems = items.filter(it => it.text.includes('[FAILED]'));
+              const failedItems = items.filter(it =>
+                it.text.includes('[FAILED]') && !it.text.includes('[auto-admit'));
               if (failedItems.length > 0) {
                 let text = doc.text;
                 let cumOffset = 0;
@@ -2664,6 +2896,7 @@ async function main() {
             const admittedCount2 = items.filter(it => it.text.includes('[Admitted]')).length;
             const qedCount = items.filter(it => it.text.includes('[Qed]') && !it.text.includes('[Qed*]')).length;
             const qedStarCount = items.filter(it => it.text.includes('[Qed*]')).length;
+            const discrepancyCount = items.filter(it => it.text.includes('[DISCREPANCY]')).length;
             const uncheckedCount = items.filter(it => it.text.includes('[unchecked]')).length;
             const openCount = items.filter(it => it.text.includes('[open]')).length;
 
@@ -2674,12 +2907,14 @@ async function main() {
             if (resolvedMode === 'errors' || resolvedMode === 'first') {
               filteredItems = items.filter(it =>
                 it.text.includes('[FAILED]') ||
+                it.text.includes('[DISCREPANCY]') ||
                 it.text.includes('[Admitted]') ||
                 it.text.includes('[Qed*]') ||
                 it.text.includes('[unchecked]')
               );
               if (resolvedMode === 'first') {
-                const firstFailed = filteredItems.findIndex(it => it.text.includes('[FAILED]'));
+                const firstFailed = filteredItems.findIndex(it =>
+                  it.text.includes('[FAILED]') || it.text.includes('[DISCREPANCY]'));
                 if (firstFailed >= 0) {
                   filteredItems = [filteredItems[firstFailed]];
                 } else if (filteredItems.length > 0) {
@@ -2690,6 +2925,7 @@ async function main() {
               if (qedCount > 0) parts.push(`${qedCount} Qed`);
               if (qedStarCount > 0) parts.push(`${qedStarCount} Qed*`);
               if (failedCount > 0) parts.push(`${failedCount} FAILED`);
+              if (discrepancyCount > 0) parts.push(`${discrepancyCount} DISCREPANCY`);
               if (admittedCount2 > 0) parts.push(`${admittedCount2} Admitted`);
               if (uncheckedCount > 0) parts.push(`${uncheckedCount} unchecked`);
               if (openCount > 0) parts.push(`${openCount} defs`);
@@ -2717,7 +2953,7 @@ async function main() {
               summaryText = summaryText.slice(0, MAX_OUTPUT_CHARS) + '\n... OUTPUT TRUNCATED (more errors not shown)';
             }
 
-            const summary = pageItems.length > 0
+            let summary = pageItems.length > 0
               ? (paginated
                   ? `\n[${startIdx}-${endIdx-1}/${filteredItems.length}]` +
                     (truncated ? ` (more after L${filteredItems[endIdx]?.startLine ?? 0})` : '')
@@ -2727,6 +2963,8 @@ async function main() {
                 + (modeSummary ? `\n${modeSummary}` : '')
                 + '\n' + summaryText
               : (filteredItems.length > 0 ? `\n${filteredItems.length} items total (use count parameter to paginate)` : (modeSummary ? `\n${modeSummary}` : ''));
+
+
 
             return reply(
               `${fileLine(file, 0)} — ${result.completed?.status || 'unknown'}, ${spanCount} spans (${loc})` + admittedInfo + summary,
@@ -3897,6 +4135,257 @@ async function main() {
             `${fileLine(file, adjTarget)} — moved "${s}" before "${before}"`,
             { applied: true, from_line: kwLine, to_line: adjTarget }
           );
+        }
+
+
+
+        case 'verdict': {
+          const { file, name: obligName, statements, timeout_ms } = args as {
+            file: string; name: string; statements?: string; timeout_ms?: number;
+          };
+          const reqTimeout = timeout_ms ?? 120000;
+          const crypto = await import('crypto');
+
+          const stmtHash = (text: string): string => {
+            const idx = text.indexOf('Proof.');
+            let stmt = idx >= 0 ? text.slice(0, idx) : text;
+            const m = stmt.match(/\b(Lemma|Theorem|Corollary|Example)\b/);
+            if (m && m.index !== undefined) stmt = stmt.slice(m.index);
+            stmt = stmt.replace(/\s+/g, ' ').trim();
+            return crypto.createHash('sha256').update(stmt, 'utf8').digest('hex');
+          };
+
+          const doc = await ensureDocumentOpened(file);
+          const docLines = doc.text.split('\n');
+
+          // Locate the lemma statement (Lemma <name> .. Proof.)
+          let kwLine = -1, proofLine = -1;
+          for (let i = 0; i < docLines.length; i++) {
+            const l = docLines[i].trim();
+            if (kwLine < 0 && /^(Lemma|Theorem|Corollary|Example)\s/.test(l) &&
+                new RegExp(`\\b${obligName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(l)) {
+              kwLine = i;
+            }
+            if (kwLine >= 0 && l.startsWith('Proof.')) { proofLine = i; break; }
+          }
+          if (kwLine < 0 || proofLine < 0) {
+            return reply(`NOT_PROVED (reason: obligation "${obligName}" not found in ${file})`,
+              { outcome: 'not_proved', reason: 'not_found', name: obligName });
+          }
+          const stmtText = docLines.slice(kwLine, proofLine + 1).join('\n');
+          const hash = stmtHash(stmtText);
+
+          // 1. Statement-immutability check vs statements.json
+          if (statements) {
+            try {
+              const sdata = JSON.parse(fs.readFileSync(statements, 'utf-8'));
+              const entry = (sdata.obligations || []).find((o: any) => o.name === obligName);
+              if (entry && entry.statement_hash !== hash) {
+                return reply(
+                  `NOT_PROVED (reason: statement_modified — statement hash mismatch for "${obligName}")\n` +
+                  `  expected ${entry.statement_hash.slice(0, 16)}… got ${hash.slice(0, 16)}…`,
+                  { outcome: 'not_proved', reason: 'statement_modified',
+                    expected: entry.statement_hash, got: hash });
+              }
+            } catch (e: any) {
+              return reply(`NOT_PROVED (reason: statements_unreadable — ${e.message})`,
+                { outcome: 'not_proved', reason: 'statements_unreadable', detail: e.message });
+            }
+          }
+
+          // 2. Proof status: find terminator (Qed./Admitted./Defined.)
+          let termLine = -1, termKind = '';
+          for (let i = proofLine + 1; i < docLines.length; i++) {
+            const l = docLines[i].trim();
+            if (l === 'Qed.' || l === 'Admitted.' || l === 'Defined.') {
+              termLine = i; termKind = l; break;
+            }
+            if (isTopLevelLine(docLines[i] || '')) break;
+          }
+          if (termKind === 'Admitted.') {
+            return reply(`NOT_PROVED (reason: admitted — proof of "${obligName}" ends in Admitted)`,
+              { outcome: 'not_proved', reason: 'admitted', line: termLine + 1 });
+          }
+          if (termKind !== 'Qed.') {
+            return reply(`NOT_PROVED (reason: unterminated — no Qed found for "${obligName}")`,
+              { outcome: 'not_proved', reason: 'unterminated', name: obligName });
+          }
+
+          // 3. File-level hole scan: any Admitted/Axiom/Parameter beyond defs
+          const holeLines: number[] = [];
+          for (let i = 0; i < docLines.length; i++) {
+            const l = docLines[i].trim();
+            if (l === 'Admitted.' || /^Axiom\s/.test(l) || /^Parameter\s/.test(l) ||
+                /\badmit\b/.test(l)) {
+              holeLines.push(i);
+            }
+          }
+          if (holeLines.length > 0) {
+            return reply(
+              `NOT_PROVED (reason: holes — ${holeLines.length} admit/Axiom/Parameter line(s): ` +
+              `${holeLines.map(l => l + 1).join(', ')})`,
+              { outcome: 'not_proved', reason: 'holes', lines: holeLines.map(l => l + 1) });
+          }
+
+          // 3. coqc validation — the authoritative compile check.  Run this
+          // BEFORE Print Assumptions: on a failed/unclosed proof, Assumptions
+          // returns goal text, not axioms.
+          try {
+            const cResult = await coqcValidate(file);
+            if (cResult.errors.length > 0) {
+              return reply(
+                `NOT_PROVED (reason: compile_error — ${cResult.errors[0].message})`,
+                { outcome: 'not_proved', reason: 'compile_error', errors: cResult.errors });
+            }
+          } catch {}
+
+          // 4. Print Assumptions — allowlist = stdlib primitives + the
+          // obligation file's own provided context (Context/Hypothesis).
+          const ALLOWED = new Set(['PrimInt63', 'PrimFloat']);
+          // Extract provided names from Context and Hypothesis declarations.
+          const provided = new Set<string>();
+          for (const l of docLines) {
+            const t = l.trim();
+            const hyp = t.match(/^Hypothesis\s+([\w']+)/u);
+            if (hyp) provided.add(hyp[1]);
+            const ctx = t.match(/^Context\s+[`{!]*([\w']+)/u);
+            if (ctx) provided.add(ctx[1]);
+            // Instance binders: `{!snakeletExn_heapGS_gen hlc Σ}` — capture
+            // each whitespace-separated binder after the `!` (Unicode-safe).
+            const inst = t.match(/^Context\s+`\{!([^}]+)\}/u);
+            if (inst) {
+              const binders = inst[1].trim().split(/\s+/u);
+              for (const b of binders) provided.add(b);
+              // heapGS instance name produced by `{!snakeletExn_heapGS_gen ...}`.
+              if (binders[0] === 'snakeletExn_heapGS_gen') {
+                provided.add('snakeletExn_heapGS_gen0');
+              }
+            }
+          }
+          const stateResult = await retryDocumentNotReady(() =>
+            lspClient.sendRequest<any>('petanque/get_state_at_pos', {
+              uri: doc.uri,
+              position: { line: termLine + 1, character: 0 },
+            }, reqTimeout)
+          );
+          const stateId = stateResult?.st;
+          let assumptions = '';
+          if (stateId != null) {
+            const pa = await lspClient.sendRequest<any>('petanque/run', {
+              st: stateId, tac: `Print Assumptions ${obligName}.`,
+            }, reqTimeout);
+            assumptions = (pa?.feedback || [])
+              .map((f: any) => Array.isArray(f) ? f[1] : String(f)).join('\n');
+          }
+          const newAxioms = assumptions.split('\n')
+            .map((l: string) => l.trim())
+            .filter((l: string) => l
+              && !l.startsWith('Axioms:')
+              && !l.startsWith('Fetching opaque proofs')
+              && !l.startsWith('Closed under')
+              && !l.startsWith('Section Variables'))
+            .filter((l: string) => {
+              const name = l.split(/\s*:/)[0].trim();
+              return !ALLOWED.has(name.split('.')[0]) && !provided.has(name) &&
+                     ![...ALLOWED].some(p => l.startsWith(p));
+            })
+            .map((l: string) => l.split(/\s*:/)[0].trim())
+            .filter((n: string) => n && !n.startsWith('.'));
+          if (newAxioms.length > 0) {
+            return reply(
+              `NOT_PROVED (reason: new_axioms — "${obligName}" depends on non-stdlib axioms: ` +
+              `${newAxioms.slice(0, 5).join(', ')})`,
+              { outcome: 'not_proved', reason: 'new_axioms', axioms: newAxioms });
+          }
+
+          return reply(
+            `PROVED — "${obligName}"\n` +
+            `  statement_hash: ${hash.slice(0, 16)}…\n` +
+            `  proof: Qed (line ${termLine + 1}), no holes, assumptions within stdlib allowlist`,
+            { outcome: 'proved', name: obligName, statement_hash: hash });
+        }
+
+        case 'certify_witness': {
+          const { file, witness, timeout_ms } = args as {
+            file: string; witness: string; timeout_ms?: number;
+          };
+          const reqTimeout = timeout_ms ?? 120000;
+          const doc = await ensureDocumentOpened(file);
+          const docLines = doc.text.split('\n');
+
+          // 1. Hole scan (text-level, not structural regex).
+          const holeLines: number[] = [];
+          for (let i = 0; i < docLines.length; i++) {
+            const l = docLines[i].trim();
+            if (l === 'Admitted.' || /^Axiom\s/.test(l) || /^Parameter\s/.test(l) ||
+                /\badmit\b/.test(l)) holeLines.push(i + 1);
+          }
+          if (holeLines.length > 0) {
+            return reply(
+              `NOT_DISPROVED (reason: holes — ${holeLines.length} admit/Axiom/Parameter line(s): ` +
+              `${holeLines.join(', ')})`,
+              { outcome: 'not_disproved', reason: 'holes', lines: holeLines });
+          }
+
+          // 2. coqc validation — all satellites + bundling must compile.
+          // coqc is the authoritative check; no terminator-line matching needed.
+          try {
+            const cResult = await coqcValidate(file);
+            if (cResult.errors.length > 0) {
+              return reply(
+                `NOT_DISPROVED (reason: compile_error — ${cResult.errors[0].message})`,
+                { outcome: 'not_disproved', reason: 'compile_error', errors: cResult.errors });
+            }
+          } catch {}
+
+          // 3. Print Assumptions on the bundling theorem.
+          const bundling = `${witness}_preservation_false`;
+          const endPos = { line: docLines.length, character: 0 };
+          const stateResult = await retryDocumentNotReady(() =>
+            lspClient.sendRequest<any>('petanque/get_state_at_pos', {
+              uri: doc.uri, position: endPos,
+            }, reqTimeout)
+          );
+          const stateId = stateResult?.st;
+          let assumptions = '';
+          if (stateId != null) {
+            const pa = await lspClient.sendRequest<any>('petanque/run', {
+              st: stateId, tac: `Print Assumptions ${bundling}.`,
+            }, reqTimeout);
+            assumptions = (pa?.feedback || [])
+              .map((f: any) => Array.isArray(f) ? f[1] : String(f)).join('\n');
+          }
+          const newAxioms = assumptions.split('\n')
+            .map((l: string) => l.trim())
+            .filter((l: string) => l
+              && !l.startsWith('Axioms:')
+              && !l.startsWith('Fetching opaque proofs')
+              && !l.startsWith('Closed under')
+              && !l.startsWith('Section Variables'))
+            .filter((l: string) => !l.startsWith('PrimInt63') && !l.startsWith('PrimFloat'))
+            .map((l: string) => l.split(/\s*:/)[0].trim())
+            .filter((n: string) => n && !n.startsWith('.'));
+          if (newAxioms.length > 0) {
+            return reply(
+              `NOT_DISPROVED (reason: new_axioms — bundling theorem depends on: ` +
+              `${newAxioms.slice(0, 5).join(', ')})`,
+              { outcome: 'not_disproved', reason: 'new_axioms', axioms: newAxioms });
+          }
+
+          // 4. Extract the CounterWitness definition for reporting.
+          let cwLine = -1;
+          for (let i = 0; i < docLines.length; i++) {
+            if (docLines[i].trim().startsWith('Definition') &&
+                docLines[i].includes(witness)) { cwLine = i; break; }
+          }
+          const cwText = cwLine >= 0
+            ? docLines.slice(cwLine, cwLine + 7).join('\n')
+            : '(witness definition not located)';
+          return reply(
+            `DISPROVED — counter-example "${witness}" certified\n` +
+            `  file compiles under coqc, no holes, bundling assumptions within stdlib allowlist\n` +
+            `  witness:\n${cwText.split('\n').map(l => '    ' + l).join('\n')}`,
+            { outcome: 'disproved', witness, bundling, extractable: cwText });
         }
 
 

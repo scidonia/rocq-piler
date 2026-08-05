@@ -9,7 +9,9 @@ Proof. reflexivity. Qed.
 
 (* This proof is wrong: exact I proves True, not False *)
 Lemma broken_proof : False.
-Proof. exact I. Qed.
+Proof. exact I.
+   { (* broken_proof:f8320b26 *) admit. }
+Admitted.
 
 (* These are syntactically correct Qed proofs but Coq
    never reaches them because of the error above. *)

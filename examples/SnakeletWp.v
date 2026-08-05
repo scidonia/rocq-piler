@@ -69,7 +69,9 @@ Section snakelet_wp.
         2: { injection H; intros _ Hval _; apply fill_K_val in Hval as [-> ->]; inversion H0. }
         3: { injection H; intros _ _ Hval; apply fill_K_val in Hval as [-> ->]; inversion H0. }
         all: discriminate H.
-  Qed.
+
+    { (* prim_binop_det:72fe62b2 *) admit. }
+Admitted.
 
   Lemma prim_let_det x v e σ κ e2 σ2 efs :
     prim_step (Let x (Val v) e) σ κ e2 σ2 efs →
@@ -103,7 +105,9 @@ Section snakelet_wp.
       + destruct Ki; simpl in H; first [discriminate H | idtac].
         injection H; intros Hval _ _.
         apply fill_K_val in Hval as [-> ->]. inversion H0.
-  Qed.
+
+    { (* prim_if_true_det:unknown *) admit. }
+Admitted.
 
   Lemma prim_if_false_det e1 e2 σ κ e2' σ2 efs :
     prim_step (If (Val (LitBool false)) e1 e2) σ κ e2' σ2 efs →
@@ -120,7 +124,9 @@ Section snakelet_wp.
       + destruct Ki; simpl in H; first [discriminate H | idtac].
         injection H; intros Hval _ _.
         apply fill_K_val in Hval as [-> ->]. inversion H0.
-  Qed.
+
+    { (* prim_if_false_det:unknown *) admit. }
+Admitted.
 
   Lemma prim_load_det l σ κ e2 σ2 efs v :
     σ !! l = Some v →
@@ -138,7 +144,9 @@ Section snakelet_wp.
       + destruct Ki; simpl in H; first [discriminate H | idtac].
         injection H; intros Hval.
         apply fill_K_val in Hval as [-> ->]. inversion H0.
-  Qed.
+
+    { (* prim_load_det:302965af *) admit. }
+Admitted.
 
   Lemma prim_store_det l v σ κ e2 σ2 efs :
     is_Some (σ !! l) →
@@ -160,7 +168,9 @@ Section snakelet_wp.
           apply fill_K_val in Hval as [-> ->]. inversion H0.
         * injection H; intros _ Hval.
           apply fill_K_val in Hval as [-> ->]. inversion H0.
-  Qed.
+
+    { (* prim_store_det:304cb084 *) admit. }
+Admitted.
 
   Lemma prim_alloc_det v σ κ e2 σ2 efs :
     prim_step (Alloc (Val v)) σ κ e2 σ2 efs →
@@ -177,7 +187,9 @@ Section snakelet_wp.
       + destruct Ki; simpl in H; first [discriminate H | idtac].
         injection H; intros Hval.
         apply fill_K_val in Hval as [-> ->]. inversion H0.
-  Qed.
+
+    { (* prim_alloc_det:unknown *) admit. }
+Admitted.
 
   (** Head-step determinant lemmas *)
   Lemma head_load_det l σ e2 σ2 efs :

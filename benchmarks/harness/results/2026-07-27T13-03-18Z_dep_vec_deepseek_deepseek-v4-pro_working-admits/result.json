@@ -1,0 +1,77 @@
+{
+  "timestamp": "2026-07-27T13:03:18Z",
+  "model": "deepseek/deepseek-v4-pro",
+  "problem": "dep_vec",
+  "profile": "working-admits",
+  "git_hash": "023dcb0",
+  "session_id": "ses_05c53c66dffezDShY0JQ6x0rik",
+  "duration_s": 339,
+  "tokens": {
+    "input": 26739,
+    "output": 8481,
+    "reasoning": 13332,
+    "cache_read": 971008,
+    "cache_write": 0
+  },
+  "cost": 0.034128679,
+  "steps": 35,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "rocq-piler_edit_file",
+      "count": 13
+    },
+    {
+      "tool": "read",
+      "count": 6
+    },
+    {
+      "tool": "todowrite",
+      "count": 4
+    },
+    {
+      "tool": "rocq-piler_focus_proof",
+      "count": 4
+    },
+    {
+      "tool": "rocq-piler_stratify",
+      "count": 2
+    },
+    {
+      "tool": "rocq-piler_close_admits",
+      "count": 2
+    },
+    {
+      "tool": "rocq-piler_check_file",
+      "count": 2
+    },
+    {
+      "tool": "bash",
+      "count": 2
+    },
+    {
+      "tool": "rocq-piler_reset_proof",
+      "count": 1
+    },
+    {
+      "tool": "edit",
+      "count": 1
+    }
+  ],
+  "eval": {
+    "file": "/tmp/bench_dep_vec_deepseek_deepseek-v4-pro_working-admits_1785157398_1567163_q6EkcL/benchmarks/complete/dep_vec.v",
+    "compiles": true,
+    "pairs_total": 2,
+    "pairs_resolved": 2,
+    "pairs": {
+      "progress": "proved",
+      "preservation": "proved"
+    }
+  }
+}

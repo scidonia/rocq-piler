@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-07-23T21:55:04Z",
+  "model": "deepseek/deepseek-v4-pro",
+  "problem": "Axiomander_GenReleaseObligations",
+  "profile": "working-admits",
+  "git_hash": "2a4dee2",
+  "session_id": "ses_06f065eb3ffeoE0kTIM8rHuxXi",
+  "duration_s": 1230,
+  "tokens": {
+    "input": 100887,
+    "output": 28676,
+    "reasoning": 50852,
+    "cache_read": 7905792,
+    "cache_write": 0
+  },
+  "cost": 0.14173370099999996,
+  "steps": 111,
+  "mcps": [
+    {
+      "name": "rocq-piler",
+      "command": "node /home/gavin/dev/Scidonia/rocq-piler/dist/index.js --coq-lsp-path /home/gavin/.opam/rocq-9/bin/coq-lsp",
+      "enabled": true
+    }
+  ],
+  "tools_used": [
+    {
+      "tool": "edit",
+      "count": 41
+    },
+    {
+      "tool": "bash",
+      "count": 28
+    },
+    {
+      "tool": "read",
+      "count": 25
+    },
+    {
+      "tool": "rocq-piler_check_file",
+      "count": 7
+    },
+    {
+      "tool": "grep",
+      "count": 4
+    },
+    {
+      "tool": "rocq-piler_edit_file",
+      "count": 3
+    },
+    {
+      "tool": "glob",
+      "count": 3
+    },
+    {
+      "tool": "rocq-piler_search_lemmas",
+      "count": 1
+    },
+    {
+      "tool": "rocq-piler_require_lib",
+      "count": 1
+    },
+    {
+      "tool": "rocq-piler_focus_proof",
+      "count": 1
+    }
+  ],
+  "eval": {
+    "compiles": false,
+    "pairs_total": 0,
+    "pairs_resolved": 0,
+    "pairs": {},
+    "error": "file not created"
+  }
+}

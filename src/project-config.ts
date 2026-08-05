@@ -34,11 +34,19 @@ function parseCoqProjectFile(filePath: string): string[] {
     const tokens = trimmed.split(/\s+/);
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
-      
+
       if (token === '-Q' || token === '-R') {
-        // -Q and -R take two arguments: physical_path logical_path
+        // -Q and -R take two arguments: physical_path logical_path.
+        // Strip surrounding quotes from the logical prefix: standard
+        // _CoqProject writes `""` for the empty prefix, but coqc needs
+        // the actual empty string (a literal `""` is rejected as an
+        // invalid identifier character).
         if (i + 2 < tokens.length) {
-          args.push(token, tokens[i + 1], tokens[i + 2]);
+          const unquote = (s: string) =>
+            (s.startsWith('"') && s.endsWith('"') && s.length >= 2)
+              ? s.slice(1, -1)
+              : s;
+          args.push(token, tokens[i + 1], unquote(tokens[i + 2]));
           i += 2;
         }
       }

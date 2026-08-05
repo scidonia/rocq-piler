@@ -53,12 +53,6 @@ Definition gen_table (f : string) : option fun_entry :=
   if String.eqb f "restock" then Some (FunSpecS gen_pre gen_post)
   else None.
 
-Lemma gen_table_total_pure : forall f pre post vs,
-  gen_table f = Some (FunSpec pre post) ->
-  pre vs -> exists v, post vs v.
-Proof.
-Admitted.
-
 Lemma gen_table_total : forall f pre post vs sigma,
   gen_table f = Some (FunSpecS pre post) ->
   pre sigma vs ->
