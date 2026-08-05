@@ -4175,6 +4175,16 @@ async function main() {
           const stmtText = docLines.slice(kwLine, proofLine + 1).join('\n');
           const hash = stmtHash(stmtText);
 
+          // Locate the obligation's full span (Lemma line .. its Qed./Admitted.
+          // terminator or the next toplevel item) for per-obligation compile
+          // checking — so a failure in ANOTHER obligation doesn't mask this one.
+          let spanEnd = docLines.length - 1;
+          for (let i = proofLine + 1; i < docLines.length; i++) {
+            const l = docLines[i].trim();
+            if (l === 'Qed.' || l === 'Admitted.' || l === 'Defined.') { spanEnd = i; break; }
+            if (isTopLevelLine(docLines[i] || '')) { spanEnd = i - 1; break; }
+          }
+
           // 1. Statement-immutability check vs statements.json
           if (statements) {
             try {
@@ -4227,15 +4237,36 @@ async function main() {
               { outcome: 'not_proved', reason: 'holes', lines: holeLines.map(l => l + 1) });
           }
 
-          // 3. coqc validation — the authoritative compile check.  Run this
-          // BEFORE Print Assumptions: on a failed/unclosed proof, Assumptions
-          // returns goal text, not axioms.
+          // 3. Per-obligation compile check — the target obligation must
+          // close, independent of OTHER obligations' failures in the same
+          // file.  Two sources:
+          //   (a) coq-lsp diagnostics (whole-file error map, not first-error
+          //       stop) — a severity-1 error inside the target's span.
+          //   (b) coqc errors whose line falls inside the target's span —
+          //       for cross-validation when coq-lsp and coqc disagree.
+          // Errors OUTSIDE the target's span are other obligations' business.
+          const targetStart = kwLine, targetEnd = spanEnd;
+
+          const lspErrs = lspClient.getDiagnostics(doc.uri)
+            .filter(d => d.severity === 1 &&
+              d.range.start.line >= targetStart && d.range.start.line <= targetEnd);
+          if (lspErrs.length > 0) {
+            return reply(
+              `NOT_PROVED (reason: compile_error — "${obligName}" has an error at ` +
+              `L${lspErrs[0].range.start.line + 1}: ${lspErrs[0].message.split('\n')[0]})`,
+              { outcome: 'not_proved', reason: 'compile_error',
+                errors: lspErrs.map(e => ({ line: e.range.start.line + 1, message: e.message })) });
+          }
+
+          // coqc cross-validation, filtered to the target's span.
           try {
             const cResult = await coqcValidate(file);
-            if (cResult.errors.length > 0) {
+            const inSpan = cResult.errors.filter(e =>
+              e.line >= targetStart + 1 && e.line <= targetEnd + 1);
+            if (inSpan.length > 0) {
               return reply(
-                `NOT_PROVED (reason: compile_error — ${cResult.errors[0].message})`,
-                { outcome: 'not_proved', reason: 'compile_error', errors: cResult.errors });
+                `NOT_PROVED (reason: compile_error — "${obligName}": ${inSpan[0].message})`,
+                { outcome: 'not_proved', reason: 'compile_error', errors: inSpan });
             }
           } catch {}
 
